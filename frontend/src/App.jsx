@@ -1864,7 +1864,7 @@ const App = () => {
         </div>
 
         <div className={`p-5 rounded-2xl shadow hover:shadow-lg transition-all cursor-pointer ${card}`}
-          onClick={() => openModal('SO without PO ACM', `/api/data/so-without-po${(() => {
+          onClick={() => openModal('SO without PO', `/api/data/so-without-po${(() => {
             const f = globalDateFilter; if (!f || f.mode === 'all') return '';
             const p = new URLSearchParams();
             if (f.mode === 'year') p.append('date_year', f.year);
@@ -1876,7 +1876,7 @@ const App = () => {
           })()}`)}>
           <div className="flex justify-between items-start">
             <div className="min-w-0 pr-3">
-              <p className={`text-sm font-medium ${txt2}`}>SO without PO ACM</p>
+              <p className={`text-sm font-medium ${txt2}`}>SO without PO</p>
               <h3 className="text-3xl font-bold mt-1 text-orange-500">{fmtNum(stats?.so_without_po)}</h3>
               <p className={`text-xs mt-1 ${txt2}`}>Click for details</p>
             </div>
@@ -2098,8 +2098,8 @@ const App = () => {
             {(() => {
               const agingPieData = [
                 { name:'< 30 Days', value:agingData.reduce((s,v)=>s+(v.less_30||0),0), fill:'#10B981' },
-                { name:'30–90 Days', value:agingData.reduce((s,v)=>s+(v.days_30_90||0),0), fill:'#F59E0B' },
-                { name:'90–180 Days', value:agingData.reduce((s,v)=>s+(v.days_90_180||0),0), fill:'#F97316' },
+                { name:'30-90 Days', value:agingData.reduce((s,v)=>s+(v.days_30_90||0),0), fill:'#F59E0B' },
+                { name:'90-180 Days', value:agingData.reduce((s,v)=>s+(v.days_90_180||0),0), fill:'#F97316' },
                 { name:'> 180 Days', value:agingData.reduce((s,v)=>s+(v.more_180||0),0), fill:'#EF4444' },
               ].filter(d=>d.value>0);
               return (
@@ -2142,6 +2142,7 @@ const App = () => {
               );
             })()}
           </div>
+
         </div>
       </div>
 
