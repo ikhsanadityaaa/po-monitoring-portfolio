@@ -1,0 +1,10 @@
+flask==3.0.0
+flask-sqlalchemy==3.1.1
+flask-cors==4.0.0
+pandas
+openpyxl
+xlrd>=2.0.1
+python-dateutil
+gunicorn
+psycopg2-binary
+holidays>=0.50
