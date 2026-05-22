@@ -746,6 +746,7 @@ const App = () => {
   const [marginDetailModal, setMarginDetailModal] = useState(null); // {category, data}
   const [picDbStatus, setPicDbStatus] = useState(null); // {product_id_count, master_pic_count, last_product_id_upload, last_pic_update}
   const [picUploadMsg, setPicUploadMsg] = useState(''); // feedback message for PIC uploads
+  const [uniqueVisitors, setUniqueVisitors] = useState(null);
 
   // Dynamic color palette for PIC badges — each unique name gets a consistent color
   const PIC_COLORS = [
@@ -793,7 +794,7 @@ const App = () => {
     },
     {
       title: 'Manual Update',
-      body: 'Use Manual Update to upload PO List, SCOR data, Product ID, or PIC mapping files. The dashboard refreshes its calculations after upload.',
+      body: 'Use Manual Update to upload PO List, SO data, Product ID, or PIC mapping files. The dashboard refreshes its calculations after upload.',
       target: '[data-tour="manual-update"]',
       page: 'dashboard',
     },
@@ -890,6 +891,25 @@ const App = () => {
     const handler = (e) => { if (uploadDropdownRef.current && !uploadDropdownRef.current.contains(e.target)) setShowUploadDropdown(false); };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  useEffect(() => {
+    const key = 'po_monitoring_visitor_id';
+    let visitorId = '';
+    try {
+      visitorId = localStorage.getItem(key) || '';
+      if (!visitorId) {
+        visitorId = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        localStorage.setItem(key, visitorId);
+      }
+    } catch {
+      visitorId = '';
+    }
+    api.post('/api/visitor/track', visitorId ? { visitor_id: visitorId } : {})
+      .then(res => setUniqueVisitors(res.data?.unique_visitors ?? null))
+      .catch(() => api.get('/api/visitor/stats')
+        .then(res => setUniqueVisitors(res.data?.unique_visitors ?? null))
+        .catch(() => {}));
   }, []);
 
   const addToast = useCallback((message, type='success') => {
@@ -1088,7 +1108,7 @@ const App = () => {
   const handleUpload = async (e, type) => {
     const file = e.target.files[0]; if (!file) return;
     e.target.value = '';
-    const label = type === 'po' ? 'PO List (Item)' : 'SCOR - Search Client Odr';
+    const label = type === 'po' ? 'PO List (Item)' : 'SO - Search Client Odr';
     const endpoint = type === 'po' ? '/api/upload/po-list' : '/api/upload/scor';
 
     // ── Client-side header validation ──────────────────────────────────
@@ -1149,7 +1169,7 @@ const App = () => {
         onUploadProgress: (ev) => setUploadProgress({ label, pct: Math.round(ev.loaded*100/(ev.total||ev.loaded)) })
       });
       setUploadProgress(null);
-      // Combine success message and SCOR Specification/Product ID diagnostics
+      // Combine success message and SO Specification/Product ID diagnostics
       // into a single toast so the success and diagnostic don't get the same
       // Date.now() ID and trample each other.
       const diag = res.data.diagnostics;
@@ -1468,7 +1488,7 @@ const App = () => {
       <div className={`flex flex-col items-center justify-center h-64 rounded-2xl ${card}`}>
         <Coins className="w-16 h-16 text-gray-300 mb-4"/>
         <p className={`text-lg font-semibold ${txt}`}>No completed data yet</p>
-        <p className={`text-sm ${txt2} mt-1`}>Upload SCOR data to see completed transactions</p>
+        <p className={`text-sm ${txt2} mt-1`}>Upload SO data to see completed transactions</p>
       </div>
     );
 
@@ -1755,7 +1775,7 @@ const App = () => {
                   <table className="w-full text-xs">
                     <thead className={`sticky top-0 z-10 ${darkMode?'bg-gray-800':'bg-white'}`}>
                       <tr className={tblHd}>
-                        {['#','Product ID','Product','Vendor','Sales','Purchase','Margin','%','Txns','Last Date'].map(h=>(
+                        {['#','SO Item','Product','Vendor','Sales','Purchase','Margin','%','Txns','Last Date'].map(h=>(
                           <th key={h} className={`px-2 py-2 text-center font-bold ${darkMode?'text-blue-300':'text-blue-700'}`}>{h}</th>
                         ))}
                       </tr>
@@ -1765,7 +1785,7 @@ const App = () => {
                         <tr key={i} className={`${trHov} ${i===0?darkMode?'bg-red-900/20':'bg-red-50':''}`}>
                           <td className={`px-2 py-2 font-bold text-red-600`}>{i+1}</td>
                           <td className="px-2 py-2">
-                            <p className="font-semibold text-blue-600 whitespace-nowrap">{t.item_code||'-'}</p>
+                            <p className="font-semibold text-blue-600 whitespace-nowrap">{t.so_item||'-'}</p>
                           </td>
                           <td className="px-2 py-2">
                             <p className={`truncate max-w-[120px] ${txt}`} title={t.product}>{t.product}</p>
@@ -2154,7 +2174,7 @@ const App = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className={tblHd}>
-              <tr>{['Vendor (SCOR)','< 30 Days','30–90 Days','90–180 Days','> 180 Days','Total Open','Sales Amount'].map(h=>(
+              <tr>{['Vendor','< 30 Days','30–90 Days','90–180 Days','> 180 Days','Total Open','Sales Amount'].map(h=>(
                 <th key={h} className={`p-3 text-center font-bold ${darkMode?'text-gray-200':'text-gray-700'}`}>{h}</th>
               ))}</tr>
             </thead>
@@ -2820,7 +2840,7 @@ const App = () => {
                   <div className={`${darkMode?'border-t border-gray-700':'border-t border-gray-100'}`}></div>
                   <label className={`flex items-center gap-2 px-4 py-3 cursor-pointer transition-all ${darkMode?'hover:bg-gray-700':'hover:bg-blue-50'}`}>
                     <Upload className="w-4 h-4 text-blue-500"/>
-                    <span className={`text-sm font-medium ${txt}`}>Upload SCOR - Search Client Odr</span>
+                    <span className={`text-sm font-medium ${txt}`}>Upload SO - Search Client Odr</span>
                     <input type="file" accept=".xlsx,.xls" onChange={e=>{handleUpload(e,'scor'); setShowUploadDropdown(false);}} className="hidden"/>
                   </label>
                   <div className={`${darkMode?'border-t border-gray-700':'border-t border-gray-100'}`}></div>
@@ -2872,9 +2892,9 @@ const App = () => {
                   <p className={`text-xs font-semibold mb-2 px-1 ${darkMode?'text-gray-300':'text-gray-600'}`}>
                     Hide data from dashboard via Excel template
                   </p>
-                  {/* PO ACM */}
+                  {/* PO */}
                   <div className={`mb-2 p-3 rounded-lg ${darkMode?'bg-gray-700':'bg-orange-50'}`}>
-                    <p className="text-xs font-bold mb-1 text-orange-700 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-orange-600"/><span>PO ACM (from PO List)</span></p>
+                    <p className="text-xs font-bold mb-1 text-orange-700 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-orange-600"/><span>PO (from PO List)</span></p>
                     <p className={`text-xs mb-2 ${darkMode?'text-gray-400':'text-gray-500'}`}>Format: PO Number-Item No (e.g. 4502358819-10)</p>
                     <div className="flex gap-2">
                       <button onClick={()=>downloadHideTemplate('PO')}
@@ -2889,7 +2909,7 @@ const App = () => {
                   </div>
                   {/* SO */}
                   <div className={`p-3 rounded-lg ${darkMode?'bg-gray-700':'bg-blue-50'}`}>
-                    <p className="text-xs font-bold mb-1 text-blue-700 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-600"/><span>SO (from SCOR)</span></p>
+                    <p className="text-xs font-bold mb-1 text-blue-700 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-600"/><span>SO</span></p>
                     <p className={`text-xs mb-2 ${darkMode?'text-gray-400':'text-gray-500'}`}>Format: SO Number or SO Number-Item No</p>
                     <div className="flex gap-2">
                       <button onClick={()=>downloadHideTemplate('SO')}
@@ -2916,12 +2936,16 @@ const App = () => {
                 </span>
               </div>
               <div>
-                <span>Last Update SCOR: </span>
+                <span>Last Update SO: </span>
                 <span className={`font-semibold ${txt}`}>
                   {stats?.last_updated_scor
                     ? (() => { try { return new Date(stats.last_updated_scor).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); } catch { return stats.last_updated_scor; } })()
                     : '-'}
                 </span>
+              </div>
+              <div>
+                <span>Unique Visitors: </span>
+                <span className={`font-semibold ${txt}`}>{uniqueVisitors == null ? '-' : fmtNum(uniqueVisitors)}</span>
               </div>
             </div>
           </div>
