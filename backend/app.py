@@ -5,6 +5,7 @@ import pandas as pd
 import re
 import os
 import json
+import hashlib
 from datetime import datetime, date, timedelta
 import io
 from sqlalchemy import func, text
@@ -243,6 +244,15 @@ class MasterPIC(db.Model):
     category_name = db.Column(db.String(255))
     pic_name      = db.Column(db.String(100))
     updated_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class UniqueVisitor(db.Model):
+    __tablename__ = 'unique_visitor'
+    id = db.Column(db.Integer, primary_key=True)
+    visitor_key = db.Column(db.String(128), unique=True, nullable=False, index=True)
+    first_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    visit_count = db.Column(db.Integer, default=1)
 
 
 # ─── Exchange rate helpers ─────────────────────────────────────────────────
@@ -845,6 +855,51 @@ def is_po_hidden(po_number, item_no, hidden_keys):
     return False
 
 
+def _client_ip():
+    forwarded = request.headers.get('X-Forwarded-For', '')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return request.headers.get('X-Real-IP') or request.remote_addr or 'unknown'
+
+
+def _visitor_hash(raw_value):
+    salt = os.environ.get('VISITOR_HASH_SALT', 'po-monitoring-dashboard')
+    return hashlib.sha256(f'{salt}:{raw_value}'.encode('utf-8')).hexdigest()
+
+
+@app.route('/api/visitor/track', methods=['POST'])
+def track_unique_visitor():
+    try:
+        data = request.get_json(silent=True) or {}
+        raw_visitor_id = str(data.get('visitor_id') or '').strip()
+        if not raw_visitor_id:
+            raw_visitor_id = f"ip:{_client_ip()}:{request.headers.get('User-Agent', '')[:120]}"
+
+        visitor_key = _visitor_hash(raw_visitor_id)
+        now = datetime.utcnow()
+        visitor = UniqueVisitor.query.filter_by(visitor_key=visitor_key).first()
+        is_new = visitor is None
+        if visitor:
+            visitor.last_seen = now
+            visitor.visit_count = (visitor.visit_count or 0) + 1
+        else:
+            visitor = UniqueVisitor(visitor_key=visitor_key, first_seen=now, last_seen=now, visit_count=1)
+            db.session.add(visitor)
+        db.session.commit()
+
+        total_unique = db.session.query(func.count(UniqueVisitor.id)).scalar() or 0
+        return jsonify({'unique_visitors': total_unique, 'is_new': is_new})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/visitor/stats', methods=['GET'])
+def visitor_stats():
+    total_unique = db.session.query(func.count(UniqueVisitor.id)).scalar() or 0
+    return jsonify({'unique_visitors': total_unique})
+
+
 @app.route('/api/dashboard/stats', methods=['GET'])
 def get_dashboard_stats():
     try:
@@ -1168,8 +1223,8 @@ def debug_so_fields():
                 for r in samples
             ],
             'hint': (
-                'If spec_fill_pct and pid_fill_pct are 0%, your SCOR Excel file likely uses '
-                'different column headers. Re-upload SCOR after checking column names. '
+                'If spec_fill_pct and pid_fill_pct are 0%, your SO Excel file likely uses '
+                'different column headers. Re-upload SO after checking column names. '
                 'Supported names: Specification|Spec|Specifications — Product ID|Product Id|'
                 'Product Code|Material|Material No|Material Number|Material Code|SKU'
             )
@@ -1878,7 +1933,7 @@ def upload_po_list():
                 'error': (
                     f'❌ Invalid file — {len(missing_required)} required columns not found: '
                     f'{", ".join(missing_required)}. '
-                    f'Please make sure you are uploading the correct ACM PO List file and try again.'
+                    f'Please make sure you are uploading the correct PO List file and try again.'
                 )
             }), 400
 
@@ -1994,7 +2049,7 @@ def upload_scor():
                 'error': (
                     f'❌ Invalid file — {len(missing_required)} required columns not found: '
                     f'{", ".join(missing_required)}. '
-                    f'Please make sure you are uploading the correct SCOR file and try again.'
+                    f'Please make sure you are uploading the correct SO file and try again.'
                 )
             }), 400
 
@@ -3068,9 +3123,9 @@ def completed_summary():
         for s, po_amt, sales, m in neg_txns[:30]:
             pct = round(m / sales * 100, 1) if sales else None
             worst_margin_transactions.append({
-                'so_item': s.so_item,
+                'so_item': s.so_item or '-',
                 'so_number': s.so_number,
-                'item_code': (s.item_code if hasattr(s, 'item_code') and s.item_code else (s.so_item or '-')),
+                'item_code': (s.item_code if hasattr(s, 'item_code') and s.item_code else '-'),
                 'product': s.product_name or '-',
                 'vendor': s.vendor_name or '-',
                 'sales_amount': sales,
